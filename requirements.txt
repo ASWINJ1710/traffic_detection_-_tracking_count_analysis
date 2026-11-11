@@ -1,0 +1,27 @@
+
+# Traffic Video Tracking & Analytics System
+
+# Deep Learning
+torch==2.11.0
+torchvision
+ultralytics==8.4.210
+
+# Computer Vision
+opencv-python
+numpy
+
+# Streamlit Dashboard
+streamlit==1.66.1
+streamlit-drawable-canvas==0.13.0
+
+# Data Processing
+pandas==2.2.3
+
+# Visualization
+plotly
+
+# Video Conversion
+imageio-ffmpeg
+
+# Tracking
+lap==0.5.14

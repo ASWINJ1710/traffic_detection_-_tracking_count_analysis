@@ -1,0 +1,48 @@
+
+# Python virtual environment
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Model weights - keep locally
+data/models/
+*.pt
+*.pth
+*.onnx
+
+# Input and generated videos
+data/videos/
+outputs/
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Dataset files
+datasets/
+*.zip
+*.tar
+*.tar.gz
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.log
+*.tmp
+
+# Environment secrets
+.env
+.env.*
+!.env.example
