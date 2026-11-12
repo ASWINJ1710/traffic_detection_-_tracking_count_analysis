@@ -5,8 +5,24 @@ from config import CLASS_NAMES, COUNTING_LINE_POSITION
 
 
 class VehicleLineCounter:
+    """
+    Vehicle counting using ByteTrack IDs and a virtual horizontal line.
 
-    def __init__(self, line_position=None):
+    Features:
+    - Hysteresis zone to reduce false crossings.
+    - Bottom-centre or geometric-centre reference point.
+    - UP/DOWN direction detection.
+    - Confidence-weighted class classification.
+    - Live and final class-wise statistics.
+    - One count per tracking ID.
+    """
+
+    def __init__(
+        self,
+        line_position=None,
+        crossing_margin=12,
+        position_mode="bottom",
+    ):
 
         self.line_position = (
             line_position
@@ -14,9 +30,20 @@ class VehicleLineCounter:
             else COUNTING_LINE_POSITION
         )
 
-        self.previous_positions = {}
+        self.crossing_margin = max(0, int(crossing_margin))
 
-        # Confidence-weighted predictions for each track
+        if position_mode not in ("bottom", "center"):
+            raise ValueError(
+                "position_mode must be 'bottom' or 'center'"
+            )
+
+        self.position_mode = position_mode
+
+        # Position and stable side for each tracking ID
+        self.previous_positions = {}
+        self.last_stable_sides = {}
+
+        # Class prediction history
         self.class_scores = defaultdict(
             lambda: defaultdict(float)
         )
@@ -25,28 +52,113 @@ class VehicleLineCounter:
             lambda: defaultdict(int)
         )
 
+        # Unique vehicle tracking
         self.counted_ids = set()
 
-        # Store crossing details until processing finishes
+        # Crossing event storage
         self.pending_events = []
-
         self.events = []
 
-        self.vehicle_counts = {
+        # Statistics
+        self.vehicle_counts = self._empty_vehicle_counts()
+
+        self.direction_counts = {
+            "UP": 0,
+            "DOWN": 0,
+        }
+
+    # --------------------------------------------------
+    # INITIALIZE EMPTY COUNTS
+    # --------------------------------------------------
+
+    @staticmethod
+    def _empty_vehicle_counts():
+
+        return {
             name: 0
             for name in CLASS_NAMES.values()
         }
 
-        self.direction_counts = {
-            "UP": 0,
-            "DOWN": 0
-        }
+    # --------------------------------------------------
+    # DETERMINE VEHICLE SIDE
+    # --------------------------------------------------
+
+    def _get_vehicle_side(self, position_y, line_y):
+
+        upper_boundary = line_y - self.crossing_margin
+        lower_boundary = line_y + self.crossing_margin
+
+        if position_y < upper_boundary:
+            return -1
+
+        if position_y > lower_boundary:
+            return 1
+
+        return 0
+
+    # --------------------------------------------------
+    # GET BEST VEHICLE CLASS
+    # --------------------------------------------------
+
+    def _get_current_class(self, track_id):
+
+        scores = self.class_scores.get(track_id, {})
+
+        if not scores:
+            return None
+
+        return max(scores, key=scores.get)
+
+    # --------------------------------------------------
+    # UPDATE CLASSIFICATION HISTORY
+    # --------------------------------------------------
+
+    def _update_class_history(
+        self,
+        track_id,
+        class_id,
+        confidence,
+    ):
+
+        class_name = CLASS_NAMES.get(int(class_id))
+
+        if class_name is None:
+            return
+
+        confidence = float(confidence)
+
+        self.class_scores[track_id][class_name] += (
+            confidence ** 2
+        )
+
+        self.class_votes[track_id][class_name] += 1
+
+    # --------------------------------------------------
+    # GET VEHICLE REFERENCE POINT
+    # --------------------------------------------------
+
+    def _get_reference_point(self, bbox):
+
+        x1, y1, x2, y2 = bbox
+
+        center_x = int((x1 + x2) / 2)
+
+        if self.position_mode == "bottom":
+            reference_y = int(y2)
+        else:
+            reference_y = int((y1 + y2) / 2)
+
+        return center_x, reference_y
+
+    # --------------------------------------------------
+    # UPDATE COUNTER
+    # --------------------------------------------------
 
     def update(
         self,
         result,
         frame_shape,
-        timestamp_seconds=0.0
+        timestamp_seconds=0.0,
     ):
 
         height = frame_shape[0]
@@ -73,121 +185,144 @@ class VehicleLineCounter:
             coordinates,
             track_ids,
             class_ids,
-            confidences
+            confidences,
         ):
 
-            # ----------------------------------
-            # VALIDATE CLASS
-            # ----------------------------------
-
-            class_name = CLASS_NAMES.get(int(class_id))
-
-            if class_name is None:
+            if int(class_id) not in CLASS_NAMES:
                 continue
 
-            # ----------------------------------
-            # CONFIDENCE-WEIGHTED CLASS VOTING
-            # ----------------------------------
-
-            confidence = float(confidence)
-
-            self.class_scores[track_id][class_name] += (
-                confidence ** 2
+            # Update classification history
+            self._update_class_history(
+                track_id,
+                class_id,
+                confidence,
             )
 
-            self.class_votes[track_id][class_name] += 1
+            # Obtain reference position
+            center_x, reference_y = self._get_reference_point(
+                bbox
+            )
 
-            # ----------------------------------
-            # VEHICLE CENTER POSITION
-            # ----------------------------------
+            self.previous_positions[track_id] = (
+                center_x,
+                reference_y,
+            )
 
-            x1, y1, x2, y2 = bbox
+            current_side = self._get_vehicle_side(
+                reference_y,
+                line_y,
+            )
 
-            center_y = int((y1 + y2) / 2)
+            # Initialize stable side
+            if track_id not in self.last_stable_sides:
 
-            previous_y = self.previous_positions.get(track_id)
+                if current_side != 0:
+                    self.last_stable_sides[track_id] = current_side
 
-            self.previous_positions[track_id] = center_y
-
-            if previous_y is None:
                 continue
 
-            # ----------------------------------
-            # CHECK LINE CROSSING
-            # ----------------------------------
-
-            crossed_down = (
-                previous_y < line_y
-                and center_y >= line_y
-            )
-
-            crossed_up = (
-                previous_y > line_y
-                and center_y <= line_y
-            )
-
-            if not crossed_down and not crossed_up:
+            # Ignore movement inside crossing zone
+            if current_side == 0:
                 continue
 
+            previous_side = self.last_stable_sides[track_id]
+
+            # Update stable side
+            self.last_stable_sides[track_id] = current_side
+
+            # No side change
+            if current_side == previous_side:
+                continue
+
+            # Prevent duplicate counting
             if track_id in self.counted_ids:
                 continue
 
             direction = (
-                "DOWN" if crossed_down else "UP"
+                "DOWN"
+                if previous_side == -1 and current_side == 1
+                else "UP"
             )
 
             self.counted_ids.add(track_id)
 
-            # Save event; final class will be assigned
-            # after all frames have been processed.
-            self.pending_events.append({
+            event = {
                 "track_id": int(track_id),
                 "direction": direction,
                 "timestamp_seconds": round(
-                    float(timestamp_seconds), 2
-                )
-            })
+                    float(timestamp_seconds),
+                    2,
+                ),
+            }
+
+            self.pending_events.append(event)
 
             print(
-                f"[CROSSING] ID={track_id} | "
+                f"[CROSSING] "
+                f"ID={track_id} | "
                 f"{direction} | "
                 f"{timestamp_seconds:.2f}s"
             )
 
+        self._refresh_live_counts()
+
         return self.get_summary()
 
-    def finalize(self):
+    # --------------------------------------------------
+    # REFRESH LIVE STATISTICS
+    # --------------------------------------------------
 
-        """
-        Determine final class using predictions from
-        the complete tracked vehicle history.
-        """
+    def _refresh_live_counts(self):
 
-        self.events = []
-
-        self.vehicle_counts = {
-            name: 0
-            for name in CLASS_NAMES.values()
-        }
+        self.vehicle_counts = self._empty_vehicle_counts()
 
         self.direction_counts = {
             "UP": 0,
-            "DOWN": 0
+            "DOWN": 0,
+        }
+
+        for event in self.pending_events:
+
+            track_id = event["track_id"]
+
+            vehicle_class = self._get_current_class(
+                track_id
+            )
+
+            if vehicle_class is None:
+                continue
+
+            self.vehicle_counts[vehicle_class] += 1
+
+            self.direction_counts[
+                event["direction"]
+            ] += 1
+
+    # --------------------------------------------------
+    # FINALIZE VEHICLE CLASSIFICATIONS
+    # --------------------------------------------------
+
+    def finalize(self):
+
+        self.events = []
+
+        self.vehicle_counts = self._empty_vehicle_counts()
+
+        self.direction_counts = {
+            "UP": 0,
+            "DOWN": 0,
         }
 
         for pending in self.pending_events:
 
             track_id = pending["track_id"]
 
-            scores = self.class_scores.get(track_id, {})
-
-            if not scores:
-                continue
-
-            final_class = max(
-                scores,
-                key=scores.get
+            final_class = self._get_current_class(
+                track_id
             )
+
+            if final_class is None:
+                continue
 
             event = {
                 "track_id": track_id,
@@ -195,7 +330,7 @@ class VehicleLineCounter:
                 "direction": pending["direction"],
                 "timestamp_seconds": pending[
                     "timestamp_seconds"
-                ]
+                ],
             }
 
             self.events.append(event)
@@ -207,12 +342,17 @@ class VehicleLineCounter:
             ] += 1
 
             print(
-                f"[FINAL CLASS] ID={track_id} | "
+                f"[FINAL CLASS] "
+                f"ID={track_id} | "
                 f"{final_class.upper()} | "
                 f"Votes={dict(self.class_votes[track_id])}"
             )
 
         return self.get_summary()
+
+    # --------------------------------------------------
+    # RETURN SUMMARY
+    # --------------------------------------------------
 
     def get_summary(self):
 
@@ -221,12 +361,18 @@ class VehicleLineCounter:
 
             "direction_counts": self.direction_counts.copy(),
 
-            "total_vehicles": len(self.counted_ids)
+            "total_vehicles": len(self.pending_events),
         }
+
+    # --------------------------------------------------
+    # RESET COUNTER
+    # --------------------------------------------------
 
     def reset(self):
 
         self.previous_positions.clear()
+
+        self.last_stable_sides.clear()
 
         self.class_scores.clear()
 
@@ -238,12 +384,11 @@ class VehicleLineCounter:
 
         self.events.clear()
 
-        self.vehicle_counts = {
-            name: 0
-            for name in CLASS_NAMES.values()
-        }
+        self.vehicle_counts = self._empty_vehicle_counts()
 
         self.direction_counts = {
             "UP": 0,
-            "DOWN": 0
+            "DOWN": 0,
         }
+
+        print("Vehicle line counter reset.")

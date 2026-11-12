@@ -1,4 +1,7 @@
 ﻿
+from collections import defaultdict
+
+import torch
 from ultralytics import YOLO
 
 from config import (
@@ -18,15 +21,26 @@ class VehicleTracker:
 
         self.model = YOLO(str(MODEL_PATH))
 
-        # Store previous class predictions for each track
         self.last_classes = {}
-
-        # Avoid printing the same initial prediction repeatedly
         self.logged_tracks = set()
+
+        self.class_scores = defaultdict(
+            lambda: defaultdict(float)
+        )
+
+        self.stable_classes = {}
+
+        self.score_decay = 0.90
+        self.switch_threshold = 1.20
 
         print("YOLO11 ByteTrack tracker initialized.")
         print("Model:", MODEL_PATH)
         print("Classes:", CLASS_NAMES)
+        print("Class smoothing enabled.")
+
+    # ------------------------------------------
+    # TRACK FRAME
+    # ------------------------------------------
 
     def track_frame(self, frame):
 
@@ -43,9 +57,98 @@ class VehicleTracker:
 
         result = results[0]
 
+        self._smooth_predictions(result)
+
         self._inspect_predictions(result)
 
         return result
+
+    # ------------------------------------------
+    # CLASS SMOOTHING
+    # ------------------------------------------
+
+    def _smooth_predictions(self, result):
+
+        if result.boxes is None or len(result.boxes) == 0:
+            return
+
+        boxes = result.boxes
+
+        if boxes.id is None:
+            return
+
+        track_ids = boxes.id.cpu().numpy().astype(int)
+        class_ids = boxes.cls.cpu().numpy().astype(int)
+        confidences = boxes.conf.cpu().numpy()
+
+        smoothed_classes = class_ids.copy()
+
+        for index, (track_id, class_id, confidence) in enumerate(
+            zip(track_ids, class_ids, confidences)
+        ):
+
+            track_id = int(track_id)
+            class_id = int(class_id)
+
+            if class_id not in CLASS_NAMES:
+                continue
+
+            # Reduce influence of older predictions
+            for previous_class in list(
+                self.class_scores[track_id]
+            ):
+
+                self.class_scores[track_id][
+                    previous_class
+                ] *= self.score_decay
+
+            # Add current prediction
+            self.class_scores[track_id][class_id] += float(
+                confidence
+            )
+
+            scores = self.class_scores[track_id]
+
+            best_class = max(scores, key=scores.get)
+
+            current_class = self.stable_classes.get(track_id)
+
+            if current_class is None:
+
+                self.stable_classes[track_id] = best_class
+
+            elif best_class != current_class:
+
+                current_score = scores.get(
+                    current_class,
+                    0.0,
+                )
+
+                best_score = scores[best_class]
+
+                if best_score > (
+                    current_score * self.switch_threshold
+                ):
+
+                    self.stable_classes[track_id] = best_class
+
+            smoothed_classes[index] = self.stable_classes[
+                track_id
+            ]
+
+        # Safely update YOLO prediction classes
+        with torch.inference_mode():
+            boxes.cls.copy_(
+                torch.as_tensor(
+                    smoothed_classes,
+                    dtype=boxes.cls.dtype,
+                    device=boxes.cls.device,
+                )
+            )
+
+    # ------------------------------------------
+    # DIAGNOSTIC LOGGING
+    # ------------------------------------------
 
     def _inspect_predictions(self, result):
 
@@ -71,7 +174,7 @@ class VehicleTracker:
 
             class_name = CLASS_NAMES.get(
                 int(class_id),
-                "unknown"
+                "unknown",
             )
 
             x1, y1, x2, y2 = bbox
@@ -81,7 +184,6 @@ class VehicleTracker:
 
             previous_class = self.last_classes.get(track_id)
 
-            # First prediction for this tracking ID
             if track_id not in self.logged_tracks:
 
                 print(
@@ -93,29 +195,32 @@ class VehicleTracker:
 
                 self.logged_tracks.add(track_id)
 
-            # Detect class changes during tracking
             elif previous_class != class_id:
 
                 previous_name = CLASS_NAMES.get(
                     previous_class,
-                    "unknown"
+                    "unknown",
                 )
 
                 print(
-                    f"[CLASS CHANGE] ID={track_id} | "
-                    f"{previous_name} -> {class_name} | "
-                    f"Confidence={confidence:.3f}"
+                    f"[STABLE CLASS CHANGE] "
+                    f"ID={track_id} | "
+                    f"{previous_name} -> {class_name}"
                 )
 
-            # Save latest prediction
             self.last_classes[track_id] = int(class_id)
 
+    # ------------------------------------------
+    # RESET
+    # ------------------------------------------
+
     def reset(self):
-        """Reset tracking and diagnostic state between videos."""
 
         self.model.predictor = None
 
         self.last_classes.clear()
         self.logged_tracks.clear()
+        self.class_scores.clear()
+        self.stable_classes.clear()
 
-        print("Tracker and diagnostic state reset.")
+        print("Tracker and classification history reset.")

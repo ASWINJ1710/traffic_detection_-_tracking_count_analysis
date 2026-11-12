@@ -3,14 +3,12 @@ import csv
 import shutil
 import subprocess
 import uuid
-import html
 from pathlib import Path
 
 import streamlit as st
 import plotly.graph_objects as go
 
 from config import (
-    BASE_DIR,
     VIDEO_DIR,
     OUTPUT_DIR,
     CLASS_NAMES,
@@ -20,108 +18,208 @@ from config import (
 from tracking.video_processor import process_video
 
 
-# --------------------------------------------------
+# ==================================================
 # PAGE CONFIGURATION
-# --------------------------------------------------
+# ==================================================
 
 st.set_page_config(
-    page_title="Traffic Analytics System",
+    page_title="Traffic Analytics | AI Monitoring",
     page_icon="🚦",
     layout="wide",
-)
-
-st.title("🚦 Traffic Video Tracking & Analytics System")
-st.caption(
-    "YOLO11n Vehicle Detection | ByteTrack Tracking | "
-    "Line Crossing Analytics"
+    initial_sidebar_state="expanded",
 )
 
 
-# --------------------------------------------------
+# ==================================================
+# CUSTOM PROFESSIONAL UI
+# ==================================================
+
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: #0b1120;
+        color: #e5e7eb;
+    }
+
+    [data-testid="stHeader"] {
+        background-color: #0b1120;
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: #111827;
+        border-right: 1px solid #263449;
+    }
+
+    .main-title {
+        font-size: 34px;
+        font-weight: 800;
+        color: #f8fafc;
+        margin-bottom: 2px;
+    }
+
+    .main-subtitle {
+        color: #94a3b8;
+        font-size: 14px;
+        margin-bottom: 24px;
+    }
+
+    .section-title {
+        font-size: 23px;
+        font-weight: 700;
+        color: #f8fafc;
+        margin-top: 10px;
+        margin-bottom: 15px;
+    }
+
+    .section-description {
+        color: #94a3b8;
+        font-size: 13px;
+        margin-top: -10px;
+        margin-bottom: 18px;
+    }
+
+    .upload-card {
+        background: linear-gradient(
+            135deg,
+            #17243a,
+            #111c30
+        );
+        border: 1px solid #30435e;
+        border-radius: 16px;
+        padding: 22px;
+        margin-bottom: 15px;
+    }
+
+    .upload-heading {
+        font-size: 19px;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .upload-description {
+        font-size: 13px;
+        color: #94a3b8;
+    }
+
+    .metric-card {
+        background: #131f32;
+        border: 1px solid #263b55;
+        border-radius: 13px;
+        padding: 17px;
+        min-height: 112px;
+    }
+
+    .metric-label {
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+    }
+
+    .metric-value {
+        color: #f8fafc;
+        font-size: 29px;
+        font-weight: 800;
+        margin-top: 8px;
+    }
+
+    .metric-caption {
+        color: #64748b;
+        font-size: 11px;
+        margin-top: 3px;
+    }
+
+    .info-card {
+        background: #131f32;
+        border: 1px solid #263b55;
+        border-radius: 13px;
+        padding: 18px;
+        margin-bottom: 12px;
+    }
+
+    .status-text {
+        color: #94a3b8;
+        font-size: 12px;
+    }
+
+    hr {
+        border-color: #263449;
+    }
+
+    div[data-testid="stMetric"] {
+        background: #131f32;
+        border: 1px solid #263b55;
+        padding: 15px;
+        border-radius: 12px;
+    }
+
+    div[data-testid="stMetricLabel"] {
+        color: #94a3b8;
+    }
+
+    div[data-testid="stMetricValue"] {
+        color: #f8fafc;
+    }
+
+    .stButton > button {
+        border-radius: 9px;
+        font-weight: 700;
+        min-height: 45px;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ==================================================
 # DIRECTORIES
-# --------------------------------------------------
+# ==================================================
 
 VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# --------------------------------------------------
-# HELPER: READ CSV WITHOUT PANDAS OR PYARROW
-# --------------------------------------------------
+# ==================================================
+# SESSION STATE
+# ==================================================
+
+if "summary" not in st.session_state:
+    st.session_state["summary"] = None
+
+if "video_path" not in st.session_state:
+    st.session_state["video_path"] = None
+
+if "csv_path" not in st.session_state:
+    st.session_state["csv_path"] = None
+
+if "input_video_name" not in st.session_state:
+    st.session_state["input_video_name"] = None
+
+
+# ==================================================
+# HELPER FUNCTIONS
+# ==================================================
 
 def read_csv_file(csv_path):
 
-    if not Path(csv_path).exists():
+    csv_path = Path(csv_path)
+
+    if not csv_path.exists():
         return []
 
-    with open(csv_path, "r", newline="", encoding="utf-8") as file:
+    with open(
+        csv_path,
+        "r",
+        newline="",
+        encoding="utf-8",
+    ) as file:
+
         return list(csv.DictReader(file))
 
-
-# --------------------------------------------------
-# HELPER: HTML TABLE
-# --------------------------------------------------
-
-def display_html_table(rows):
-
-    if not rows:
-        st.info("No vehicle crossing events recorded.")
-        return
-
-    headers = list(rows[0].keys())
-
-    table_html = """
-    <style>
-    .traffic-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 14px;
-    }
-
-    .traffic-table th {
-        background-color: #1f2937;
-        color: white;
-        padding: 12px;
-        text-align: left;
-    }
-
-    .traffic-table td {
-        padding: 10px;
-        border-bottom: 1px solid #dddddd;
-    }
-
-    .traffic-table tr:nth-child(even) {
-        background-color: #f3f4f6;
-    }
-    </style>
-
-    <table class="traffic-table">
-    <thead>
-    <tr>
-    """
-
-    for header in headers:
-        table_html += f"<th>{html.escape(header)}</th>"
-
-    table_html += "</tr></thead><tbody>"
-
-    for row in rows:
-        table_html += "<tr>"
-
-        for header in headers:
-            value = html.escape(str(row.get(header, "")))
-            table_html += f"<td>{value}</td>"
-
-        table_html += "</tr>"
-
-    table_html += "</tbody></table>"
-
-    st.markdown(table_html, unsafe_allow_html=True)
-
-
-# --------------------------------------------------
-# HELPER: CONVERT VIDEO TO H264
-# --------------------------------------------------
 
 def convert_video_to_h264(input_path):
 
@@ -131,13 +229,15 @@ def convert_video_to_h264(input_path):
         input_path.stem + "_browser.mp4"
     )
 
-    # Find FFmpeg
     ffmpeg_path = shutil.which("ffmpeg")
 
     if ffmpeg_path is None:
+
         try:
             import imageio_ffmpeg
+
             ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+
         except ImportError:
             return None
 
@@ -155,6 +255,7 @@ def convert_video_to_h264(input_path):
     ]
 
     try:
+
         result = subprocess.run(
             command,
             capture_output=True,
@@ -162,123 +263,364 @@ def convert_video_to_h264(input_path):
             timeout=600,
         )
 
-        if result.returncode == 0 and output_path.exists():
-            if output_path.stat().st_size > 0:
-                return output_path
+        if (
+            result.returncode == 0
+            and output_path.exists()
+            and output_path.stat().st_size > 0
+        ):
+            return output_path
 
-    except Exception as error:
-        st.warning(f"Video conversion failed: {error}")
+    except Exception:
+        return None
 
     return None
 
 
-# --------------------------------------------------
-# SIDEBAR
-# --------------------------------------------------
+def get_average_speed(events):
 
-st.sidebar.header("Project Information")
+    speeds = []
 
-st.sidebar.write("**Detection Model:** YOLO11n")
-st.sidebar.write("**Tracking Algorithm:** ByteTrack")
-st.sidebar.write("**Detection Classes:**")
-
-for class_name in CLASS_NAMES.values():
-    st.sidebar.write(f"- {class_name.title()}")
-
-st.sidebar.write("**Counting:** Line Crossing")
-
-st.sidebar.divider()
-
-st.sidebar.info(
-    "Upload a traffic video to detect and track vehicles."
-)
-
-
-# --------------------------------------------------
-# VIDEO UPLOAD
-# --------------------------------------------------
-
-st.header("1. Upload Traffic Video")
-
-uploaded_video = st.file_uploader(
-    "Choose a traffic video",
-    type=[
-        extension.replace(".", "")
-        for extension in SUPPORTED_VIDEO_FORMATS
-    ],
-)
-
-if uploaded_video is not None:
-
-    st.success(f"Uploaded: {uploaded_video.name}")
-
-    if st.button(
-        "▶ Start Traffic Analysis",
-        type="primary",
-        use_container_width=True,
-    ):
-
-        unique_id = uuid.uuid4().hex[:8]
-
-        input_path = VIDEO_DIR / f"input_{unique_id}.mp4"
-        output_path = OUTPUT_DIR / f"tracking_{unique_id}.mp4"
-        csv_path = OUTPUT_DIR / f"events_{unique_id}.csv"
-
-        with open(input_path, "wb") as file:
-            file.write(uploaded_video.getbuffer())
-
-        progress = st.progress(0)
-        status = st.empty()
+    for event in events:
 
         try:
-            status.info("Processing video with YOLO11n and ByteTrack...")
 
-            progress.progress(20)
+            speed = float(event.get("speed_kmh", ""))
 
-            summary = process_video(
-                str(input_path),
-                str(output_path),
-                str(csv_path),
+            if speed >= 0:
+                speeds.append(speed)
+
+        except (ValueError, TypeError):
+            continue
+
+    if not speeds:
+        return None
+
+    return sum(speeds) / len(speeds)
+
+
+def get_class_count(vehicle_counts, class_name):
+
+    return vehicle_counts.get(
+        class_name,
+        vehicle_counts.get(str(class_name).lower(), 0),
+    )
+
+
+def create_metric(label, value, caption=""):
+
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value">{value}</div>
+            <div class="metric-caption">{caption}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ==================================================
+# SIDEBAR
+# ==================================================
+
+with st.sidebar:
+
+    st.markdown("## 🚦 Traffic AI")
+
+    st.caption("Intelligent Traffic Monitoring System")
+
+    st.divider()
+
+    st.markdown("### SYSTEM INFORMATION")
+
+    st.write("**Detection:** YOLO11n")
+    st.write("**Tracking:** ByteTrack")
+    st.write("**Counting:** Line Crossing")
+    st.write("**Speed:** Perspective Calibration")
+
+    st.divider()
+
+    st.markdown("### DETECTION CLASSES")
+
+    for class_name in CLASS_NAMES.values():
+        st.write(f"• {str(class_name).title()}")
+
+    st.divider()
+
+    st.caption(
+        "AI-powered vehicle detection, tracking, "
+        "counting and traffic analysis."
+    )
+
+
+# ==================================================
+# MAIN HEADER
+# ==================================================
+
+st.markdown(
+    """
+    <div class="main-title">
+        🚦 Traffic Analytics Dashboard
+    </div>
+
+    <div class="main-subtitle">
+        AI-powered vehicle detection, tracking,
+        counting and speed monitoring
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ==================================================
+
+# ==================================================
+# SECTION 1: VIDEO UPLOAD + LIVE DETECTION
+# ==================================================
+
+st.markdown(
+    '<div class="section-title">01 / Traffic Video Analysis</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="section-description">'
+    'Upload traffic footage and watch AI detection in real time.'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+upload_col, preview_col = st.columns([1, 1.35], gap="large")
+
+with upload_col:
+
+    with st.container(border=True):
+
+        st.markdown("### ?? Upload Traffic Video")
+
+        st.markdown(
+            "Supported formats: MP4, AVI, MOV and other configured formats."
+        )
+
+        uploaded_video = st.file_uploader(
+            "Choose a video file",
+            type=[
+                extension.replace(".", "")
+                for extension in SUPPORTED_VIDEO_FORMATS
+            ],
+            label_visibility="collapsed",
+        )
+
+        if uploaded_video is not None:
+
+            file_size_mb = len(uploaded_video.getbuffer()) / (
+                1024 * 1024
             )
 
-            progress.progress(85)
+            st.success(f"Selected: {uploaded_video.name}")
+            st.info(f"File size: {file_size_mb:.2f} MB")
 
-            status.info("Preparing browser-compatible video...")
+            start_analysis = st.button(
+                "? Start Traffic Analysis",
+                type="primary",
+                use_container_width=True,
+            )
 
-            browser_video = convert_video_to_h264(output_path)
+            if start_analysis:
 
-            progress.progress(100)
+                unique_id = uuid.uuid4().hex[:8]
 
-            if browser_video is not None:
-                final_video = str(browser_video)
-                status.success("Traffic analysis completed successfully.")
-            else:
-                final_video = str(output_path)
-                status.warning(
-                    "Analysis completed, but H.264 conversion was unavailable. "
-                    "The original processed video is available for download."
+                input_extension = Path(
+                    uploaded_video.name
+                ).suffix.lower()
+
+                if not input_extension:
+                    input_extension = ".mp4"
+
+                input_path = VIDEO_DIR / (
+                    f"input_{unique_id}{input_extension}"
                 )
 
-            st.session_state["summary"] = summary
-            st.session_state["video_path"] = final_video
-            st.session_state["original_video_path"] = str(output_path)
-            st.session_state["csv_path"] = str(csv_path)
+                output_path = OUTPUT_DIR / (
+                    f"tracking_{unique_id}.mp4"
+                )
 
-        except Exception as error:
-            status.error(f"Processing failed: {error}")
-            st.exception(error)
+                csv_path = OUTPUT_DIR / (
+                    f"events_{unique_id}.csv"
+                )
+
+                with open(input_path, "wb") as file:
+                    file.write(uploaded_video.getbuffer())
+
+                st.session_state["summary"] = None
+                st.session_state["video_path"] = None
+                st.session_state["csv_path"] = None
+
+                status = st.empty()
+
+                # Create the preview placeholder before processing starts.
+                preview_placeholder = st.empty()
+
+                def update_live_preview(frame):
+                    preview_placeholder.image(
+                        frame[:, :, ::-1],
+                        channels="RGB",
+                        use_container_width=True,
+                    )
+
+                try:
+
+                    with st.spinner(
+                        "Running YOLO11 detection, ByteTrack tracking "
+                        "and speed estimation..."
+                    ):
+
+                        status.info(
+                            "Processing traffic video..."
+                        )
+
+                        summary = process_video(
+                            str(input_path),
+                            str(output_path),
+                            str(csv_path),
+                            frame_callback=update_live_preview,
+                        )
+
+                        status.info(
+                            "Preparing browser-compatible output video..."
+                        )
+
+                        browser_video = convert_video_to_h264(
+                            output_path
+                        )
+
+                        if browser_video is not None:
+                            final_video = browser_video
+                            status.success(
+                                "Traffic analysis completed successfully!"
+                            )
+                        else:
+                            final_video = output_path
+                            status.warning(
+                                "Analysis completed. Browser conversion "
+                                "was unavailable; download the original video."
+                            )
+
+                        st.session_state["summary"] = summary
+                        st.session_state["video_path"] = str(final_video)
+                        st.session_state["csv_path"] = str(csv_path)
+                        st.session_state["input_video_name"] = uploaded_video.name
+
+                    st.rerun()
+
+                except Exception as error:
+
+                    status.error(
+                        f"Traffic analysis failed: {error}"
+                    )
+
+                    st.exception(error)
 
 
-# --------------------------------------------------
-# RESULTS
-# --------------------------------------------------
+with preview_col:
 
-if "summary" in st.session_state:
+    with st.container(border=True):
 
-    summary = st.session_state["summary"]
+        st.markdown("### ?? Live Detection Preview")
 
-    video_path = Path(st.session_state["video_path"])
-    csv_path = Path(st.session_state["csv_path"])
+        preview_placeholder = st.empty()
+
+        saved_video = st.session_state.get("video_path")
+        saved_summary = st.session_state.get("summary")
+
+        if saved_summary is not None and saved_video:
+            if Path(saved_video).exists():
+                st.success("Detection completed")
+                st.video(saved_video)
+            else:
+                preview_placeholder.info(
+                    "The output video is not available."
+                )
+        else:
+            preview_placeholder.info(
+                "Your annotated traffic video will appear here "
+                "while AI detection is running."
+            )
+
+
+# ==================================================
+# SECTION 2: PROCESSED OUTPUT VIDEO
+# ==================================================
+
+summary = st.session_state.get("summary")
+
+if summary is not None:
+
+    st.divider()
+
+    st.markdown(
+        '<div class="section-title">02 / Processed Output Video</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<div class="section-description">'
+        'Watch the annotated video with vehicle detection, tracking IDs '
+        'and speed labels.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    video_path = Path(
+        st.session_state["video_path"]
+    )
+
+    if video_path.exists():
+
+        with st.container(border=True):
+
+            st.video(str(video_path))
+
+            col1, col2 = st.columns([3, 1])
+
+            col1.caption(
+                f"Processed file: {video_path.name}"
+            )
+
+            with open(video_path, "rb") as file:
+
+                col2.download_button(
+                    label="⬇ Download Video",
+                    data=file.read(),
+                    file_name=video_path.name,
+                    mime="video/mp4",
+                    use_container_width=True,
+                )
+
+    else:
+
+        st.error("Processed video file not found.")
+
+
+    # ==================================================
+    # SECTION 3: ANALYTICS DASHBOARD
+    # ==================================================
+
+    st.divider()
+
+    st.markdown(
+        '<div class="section-title">03 / Traffic Analytics</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<div class="section-description">'
+        'Vehicle statistics, traffic direction, speed estimates '
+        'and crossing event analysis.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     vehicle_counts = summary.get(
         "vehicle_counts", {}
@@ -292,94 +634,150 @@ if "summary" in st.session_state:
         "total_vehicles", 0
     )
 
-    st.divider()
-
-    st.header("2. Traffic Analytics Dashboard")
-
-    # ----------------------------------------------
-    # KPI METRICS
-    # ----------------------------------------------
-
-    st.subheader("Vehicle Crossing Summary")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "Total Vehicles",
-        total_vehicles,
+    csv_path = Path(
+        st.session_state["csv_path"]
     )
 
-    col2.metric(
-        "UP Direction",
-        direction_counts.get("UP", 0),
-    )
+    events = read_csv_file(csv_path)
 
-    col3.metric(
-        "DOWN Direction",
-        direction_counts.get("DOWN", 0),
-    )
+    average_speed = get_average_speed(events)
 
-    # ----------------------------------------------
-    # CLASS COUNTS
-    # ----------------------------------------------
 
-    st.subheader("Vehicle Class Counts")
+    # --------------------------------------------------
+    # KPI CARDS
+    # --------------------------------------------------
 
-    class_columns = st.columns(4)
+    st.markdown("#### Overall Performance")
 
-    for index, class_name in enumerate(CLASS_NAMES.values()):
+    col1, col2, col3, col4 = st.columns(4)
 
-        count = vehicle_counts.get(class_name, 0)
-
-        class_columns[index].metric(
-            class_name.title(),
-            count,
+    with col1:
+        create_metric(
+            "Total Vehicles",
+            total_vehicles,
+            "Unique line crossings",
         )
 
-    # ----------------------------------------------
+    with col2:
+        create_metric(
+            "UP Direction",
+            direction_counts.get("UP", 0),
+            "Vehicles moving UP",
+        )
+
+    with col3:
+        create_metric(
+            "DOWN Direction",
+            direction_counts.get("DOWN", 0),
+            "Vehicles moving DOWN",
+        )
+
+    with col4:
+
+        speed_display = (
+            f"{average_speed:.1f} km/h"
+            if average_speed is not None
+            else "N/A"
+        )
+
+        create_metric(
+            "Average Speed",
+            speed_display,
+            "Average of available crossing-event estimates",
+        )
+
+
+    # --------------------------------------------------
+    # VEHICLE CLASS CARDS
+    # --------------------------------------------------
+
+    st.markdown("#### Vehicle Classification")
+
+    class_names = list(CLASS_NAMES.values())
+
+    class_columns = st.columns(
+        max(1, len(class_names))
+    )
+
+    for index, class_name in enumerate(class_names):
+
+        count = get_class_count(
+            vehicle_counts,
+            class_name,
+        )
+
+        with class_columns[index]:
+
+            create_metric(
+                str(class_name).title(),
+                count,
+                "Detected crossing vehicles",
+            )
+
+
+    # --------------------------------------------------
     # CHARTS
-    # ----------------------------------------------
+    # --------------------------------------------------
 
     st.divider()
+
+    st.markdown("#### Traffic Insights")
 
     chart_col1, chart_col2 = st.columns(2)
 
+    # VEHICLE DISTRIBUTION
+
     with chart_col1:
 
-        st.subheader("Vehicles by Class")
-
-        class_names = list(CLASS_NAMES.values())
+        st.markdown("**Vehicle Distribution**")
 
         class_values = [
-            vehicle_counts.get(name, 0)
+            get_class_count(vehicle_counts, name)
             for name in class_names
         ]
 
-        bar_chart = go.Figure(
-            data=[
-                go.Bar(
-                    x=class_names,
-                    y=class_values,
-                    text=class_values,
-                    textposition="auto",
-                )
-            ]
-        )
+        if sum(class_values) > 0:
 
-        bar_chart.update_layout(
-            xaxis_title="Vehicle Class",
-            yaxis_title="Crossing Count",
-            template="plotly_white",
-        )
+            class_chart = go.Figure(
+                data=[
+                    go.Bar(
+                        x=[
+                            str(name).title()
+                            for name in class_names
+                        ],
+                        y=class_values,
+                        text=class_values,
+                        textposition="auto",
+                    )
+                ]
+            )
 
-        st.plotly_chart(
-            bar_chart,
-            use_container_width=True,
-        )
+            class_chart.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="#131f32",
+                plot_bgcolor="#131f32",
+                font=dict(color="#e5e7eb"),
+                xaxis_title="Vehicle Type",
+                yaxis_title="Vehicle Count",
+                margin=dict(l=20, r=20, t=25, b=30),
+                height=340,
+            )
+
+            st.plotly_chart(
+                class_chart,
+                use_container_width=True,
+            )
+
+        else:
+
+            st.info("No vehicle crossing data available.")
+
+
+    # DIRECTION DISTRIBUTION
 
     with chart_col2:
 
-        st.subheader("Direction Distribution")
+        st.markdown("**Traffic Direction Distribution**")
 
         directions = ["UP", "DOWN"]
 
@@ -390,92 +788,184 @@ if "summary" in st.session_state:
 
         if sum(direction_values) > 0:
 
-            pie_chart = go.Figure(
+            direction_chart = go.Figure(
                 data=[
                     go.Pie(
                         labels=directions,
                         values=direction_values,
-                        hole=0.4,
+                        hole=0.55,
                     )
                 ]
             )
 
-            pie_chart.update_layout(
-                template="plotly_white",
+            direction_chart.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="#131f32",
+                plot_bgcolor="#131f32",
+                font=dict(color="#e5e7eb"),
+                margin=dict(l=20, r=20, t=25, b=25),
+                height=340,
             )
 
             st.plotly_chart(
-                pie_chart,
+                direction_chart,
                 use_container_width=True,
             )
 
         else:
-            st.info("No direction crossings recorded.")
 
-    # ----------------------------------------------
-    # PROCESSED VIDEO
-    # ----------------------------------------------
+            st.info("No direction crossing data available.")
+
+
+    # --------------------------------------------------
+    # SPEED ANALYSIS
+    # --------------------------------------------------
 
     st.divider()
 
-    st.header("3. Processed Traffic Video")
+    st.markdown("#### Vehicle Speed Analysis")
 
-    if video_path.exists():
+    speed_records = []
 
-        st.video(str(video_path))
+    for event in events:
 
-        with open(video_path, "rb") as file:
+        try:
 
-            st.download_button(
-                label="Download Processed Video",
-                data=file.read(),
-                file_name=video_path.name,
-                mime="video/mp4",
-                use_container_width=True,
-            )
+            speed = float(event.get("speed_kmh", ""))
+
+            if speed >= 0:
+
+                speed_records.append({
+                    "track_id": event.get("track_id", ""),
+                    "vehicle_class": event.get("vehicle_class", ""),
+                    "speed_kmh": speed,
+                })
+
+        except (ValueError, TypeError):
+            continue
+
+    if speed_records:
+
+        speed_chart = go.Figure(
+            data=[
+                go.Bar(
+                    x=[
+                        f"ID {record['track_id']}"
+                        for record in speed_records
+                    ],
+                    y=[
+                        record["speed_kmh"]
+                        for record in speed_records
+                    ],
+                    text=[
+                        f"{record['speed_kmh']:.1f}"
+                        for record in speed_records
+                    ],
+                    textposition="auto",
+                )
+            ]
+        )
+
+        speed_chart.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="#131f32",
+            plot_bgcolor="#131f32",
+            font=dict(color="#e5e7eb"),
+            xaxis_title="Vehicle Track ID",
+            yaxis_title="Estimated Speed (km/h)",
+            margin=dict(l=20, r=20, t=25, b=30),
+            height=350,
+        )
+
+        st.plotly_chart(
+            speed_chart,
+            use_container_width=True,
+        )
+
+        st.caption(
+            "Speed chart uses available crossing-event estimates only. "
+            "These values depend on camera-specific calibration."
+        )
 
     else:
-        st.error("Processed video file not found.")
 
-    # ----------------------------------------------
-    # CROSSING EVENTS
-    # ----------------------------------------------
+        st.info(
+            "No speed estimates are available in the crossing events."
+        )
+
+
+    # --------------------------------------------------
+    # VEHICLE CROSSING EVENTS
+    # --------------------------------------------------
 
     st.divider()
 
-    st.header("4. Vehicle Crossing Events")
+    st.markdown("#### Vehicle Crossing Event History")
 
-    events = read_csv_file(csv_path)
+    if events:
 
-    display_html_table(events)
-
-    if csv_path.exists():
+        st.dataframe(
+            events,
+            use_container_width=True,
+            hide_index=True,
+        )
 
         with open(csv_path, "rb") as file:
 
             st.download_button(
-                label="Download Crossing Events CSV",
+                label="⬇ Download Vehicle Events CSV",
                 data=file.read(),
                 file_name="vehicle_crossing_events.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
 
-    # ----------------------------------------------
+    else:
+
+        st.info(
+            "No vehicle crossing events were recorded."
+        )
+
+
+    # --------------------------------------------------
     # FOOTNOTE
-    # ----------------------------------------------
+    # --------------------------------------------------
 
     st.divider()
 
     st.caption(
-        "Note: Counts represent unique tracked vehicles that crossed "
-        "the virtual counting line. They do not represent every vehicle "
-        "visible in the video."
+        "Vehicle counts represent unique tracked vehicles crossing "
+        "the virtual counting line. Speed estimates depend on "
+        "camera-specific perspective calibration and assumed road "
+        "dimensions. They are not verified real-world speeds."
     )
+
 
 else:
 
+    st.divider()
+
     st.info(
-        "Upload a traffic video and click Start Traffic Analysis "
-        "to view the results."
+        "Upload a traffic video above and click "
+        "'Start Traffic Analysis' to generate the output video "
+        "and analytics dashboard."
     )
+
+
+# ==================================================
+# FOOTER
+# ==================================================
+
+st.markdown(
+    """
+    <div style="
+        text-align:center;
+        color:#64748b;
+        padding:25px 0 10px 0;
+        font-size:12px;
+    ">
+        TRAFFIC ANALYTICS SYSTEM · YOLO11n · ByteTrack · OpenCV
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
