@@ -276,13 +276,20 @@ def convert_video_to_h264(input_path):
     return None
 
 
-def get_average_speed(events):
+def get_average_speed_kmh(events):
 
     speeds = []
 
     for event in events:
 
         try:
+
+            if event.get("speed_type") not in (
+                "",
+                "approximate_perspective",
+                None,
+            ):
+                continue
 
             speed = float(event.get("speed_kmh", ""))
 
@@ -640,7 +647,7 @@ if summary is not None:
 
     events = read_csv_file(csv_path)
 
-    average_speed = get_average_speed(events)
+    average_speed = get_average_speed_kmh(events)
 
 
     # --------------------------------------------------
@@ -675,15 +682,15 @@ if summary is not None:
     with col4:
 
         speed_display = (
-            f"{average_speed:.1f} km/h"
+            f"~{average_speed:.1f} km/h"
             if average_speed is not None
             else "N/A"
         )
 
         create_metric(
-            "Average Speed",
+            "Average Approximate Speed",
             speed_display,
-            "Average of available crossing-event estimates",
+            "Perspective-based estimated speed",
         )
 
 
@@ -818,6 +825,7 @@ if summary is not None:
 
 
     # --------------------------------------------------
+    # --------------------------------------------------
     # SPEED ANALYSIS
     # --------------------------------------------------
 
@@ -831,10 +839,16 @@ if summary is not None:
 
         try:
 
+            if event.get("speed_type") not in (
+                "",
+                "approximate_perspective",
+                None,
+            ):
+                continue
+
             speed = float(event.get("speed_kmh", ""))
 
             if speed >= 0:
-
                 speed_records.append({
                     "track_id": event.get("track_id", ""),
                     "vehicle_class": event.get("vehicle_class", ""),
@@ -858,7 +872,7 @@ if summary is not None:
                         for record in speed_records
                     ],
                     text=[
-                        f"{record['speed_kmh']:.1f}"
+                        f"~{record['speed_kmh']:.1f} km/h"
                         for record in speed_records
                     ],
                     textposition="auto",
@@ -872,7 +886,7 @@ if summary is not None:
             plot_bgcolor="#131f32",
             font=dict(color="#e5e7eb"),
             xaxis_title="Vehicle Track ID",
-            yaxis_title="Estimated Speed (km/h)",
+            yaxis_title="Approximate Speed (km/h)",
             margin=dict(l=20, r=20, t=25, b=30),
             height=350,
         )
@@ -883,18 +897,18 @@ if summary is not None:
         )
 
         st.caption(
-            "Speed chart uses available crossing-event estimates only. "
-            "These values depend on camera-specific calibration."
+            "Speeds are approximate perspective-based estimates using "
+            "the configured road calibration. They are not certified "
+            "real-world speed measurements."
         )
 
     else:
 
         st.info(
-            "No speed estimates are available in the crossing events."
+            "No approximate speed estimates are available in the crossing events."
         )
 
 
-    # --------------------------------------------------
     # VEHICLE CROSSING EVENTS
     # --------------------------------------------------
 

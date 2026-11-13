@@ -1,114 +1,15 @@
 ﻿
 import csv
-import random
+import json
 from pathlib import Path
 
 import cv2
 
 from tracking.tracker import VehicleTracker
 from analytics.line_counter import VehicleLineCounter
+from analytics.speed_estimator import VehicleSpeedEstimator
 
 from config import COUNTING_LINE_POSITION, CLASS_NAMES
-
-
-# ==================================================
-# SIMULATED SPEED CONFIGURATION
-# ==================================================
-
-SPEED_RANGES = {
-    "car": (20.0, 60.0),
-    "truck": (15.0, 45.0),
-    "bus": (15.0, 40.0),
-    "motorbike": (20.0, 60.0),
-}
-
-SPEED_CHANGE_INTERVAL = 0.8
-SPEED_RESPONSE = 2.0
-
-
-def get_estimated_speed(
-    track_id,
-    vehicle_class,
-    timestamp,
-    speed_states,
-):
-    """
-    Generate smoothly changing random demonstration speeds.
-
-    IMPORTANT:
-    These values are simulated, not measured or predicted
-    real-world vehicle speeds.
-    """
-
-    vehicle_class = vehicle_class.lower()
-
-    minimum, maximum = SPEED_RANGES.get(
-        vehicle_class,
-        (20.0, 50.0),
-    )
-
-    if track_id not in speed_states:
-
-        initial_speed = random.uniform(
-            minimum,
-            maximum,
-        )
-
-        speed_states[track_id] = {
-            "current": initial_speed,
-            "target": random.uniform(
-                minimum,
-                maximum,
-            ),
-            "last_change": timestamp,
-            "last_time": timestamp,
-        }
-
-    state = speed_states[track_id]
-
-    elapsed = max(
-        0.0,
-        timestamp - state["last_time"],
-    )
-
-    # Select a new random target periodically.
-    if (
-        timestamp - state["last_change"]
-        >= SPEED_CHANGE_INTERVAL
-    ):
-
-        new_target = random.uniform(
-            minimum,
-            maximum,
-        )
-
-        # Encourage visible speed increases/decreases.
-        if abs(new_target - state["current"]) < 5:
-            new_target = random.choice([
-                minimum,
-                maximum,
-                random.uniform(minimum, maximum),
-            ])
-
-        state["target"] = new_target
-        state["last_change"] = timestamp
-
-    # Smoothly approach the new target.
-    alpha = min(
-        1.0,
-        elapsed * SPEED_RESPONSE,
-    )
-
-    state["current"] += (
-        state["target"] - state["current"]
-    ) * alpha
-
-    state["last_time"] = timestamp
-
-    return round(
-        state["current"],
-        1,
-    )
 
 
 # ==================================================
@@ -287,10 +188,15 @@ def process_video(
         line_position=COUNTING_LINE_POSITION
     )
 
-    # One changing speed state per tracking ID.
-    speed_states = {}
+    # Experimental perspective-based speed estimation.
+    # Current road dimensions are assumptions, not verified measurements.
+    physical_speed_estimator = VehicleSpeedEstimator(
+        history_seconds=0.8,
+        min_samples=5,
+        allow_assumed_dimensions=True,
+    )
 
-    # Latest speed information for CSV.
+    # Latest available speed information for CSV.
     latest_speed_by_track = {}
 
     frame_number = 0
@@ -307,9 +213,11 @@ def process_video(
     print("YOLO detection: ENABLED")
     print("ByteTrack tracking: ENABLED")
     print("Vehicle counting: ENABLED")
-    print("Dynamic random speed simulation: ENABLED")
-    print("Speed calibration: NOT REQUIRED")
-    print("WARNING: Speeds are simulated, not measured.")
+    print("Random speed simulation: DISABLED")
+    print("Approximate perspective speed estimation: ENABLED")
+    print("Pixel-based fallback speed estimation: ENABLED")
+    print("Speed calibration: ASSUMED 3.5m x 10m")
+    print("IMPORTANT: km/h values are experimental estimates, not verified speeds.")
 
     try:
 
@@ -347,7 +255,8 @@ def process_video(
             current_labels = {}
 
             # --------------------------------------
-            # DYNAMIC SPEED SIMULATION
+            # --------------------------------------
+            # APPROXIMATE PERSPECTIVE SPEED
             # --------------------------------------
 
             if (
@@ -356,17 +265,9 @@ def process_video(
                 and boxes.cls is not None
             ):
 
-                track_ids = (
-                    boxes.id.int().cpu().tolist()
-                )
-
-                class_ids = (
-                    boxes.cls.int().cpu().tolist()
-                )
-
-                bounding_boxes = (
-                    boxes.xyxy.cpu().tolist()
-                )
+                track_ids = boxes.id.int().cpu().tolist()
+                class_ids = boxes.cls.int().cpu().tolist()
+                bounding_boxes = boxes.xyxy.cpu().tolist()
 
                 for track_id, class_id, bbox in zip(
                     track_ids,
@@ -382,29 +283,38 @@ def process_video(
                         "unknown",
                     ).lower()
 
-                    estimated_speed = get_estimated_speed(
+                    approximate_info = physical_speed_estimator.update(
                         track_id,
-                        vehicle_class,
+                        bbox,
                         timestamp,
-                        speed_states,
                     )
 
-                    latest_speed_by_track[track_id] = {
-                        "speed_kmh": estimated_speed,
-                        "vehicle_class": vehicle_class,
-                        "speed_type": "simulated_random",
-                    }
+                    if approximate_info is not None:
 
-                    label = (
-                        f"Sim. {estimated_speed:.1f} km/h"
-                    )
+                        estimated_speed = approximate_info["speed_kmh"]
+
+                        latest_speed_by_track[track_id] = {
+                            "road": approximate_info["road"],
+                            "speed_kmh": estimated_speed,
+                            "vehicle_class": vehicle_class,
+                            "speed_type": "approximate_perspective",
+                            "calibration_status": (
+                                approximate_info["calibration_status"]
+                            ),
+                        }
+
+                        label = f"~{estimated_speed:.1f} km/h"
+                        color = (0, 165, 255)
+
+                    else:
+                        label = "Measuring..."
+                        color = (0, 165, 255)
 
                     current_labels[track_id] = (
                         label,
-                        (0, 255, 255),
+                        color,
                     )
 
-            # --------------------------------------
             # DRAW YOLO DETECTIONS
             # --------------------------------------
 
@@ -596,6 +506,7 @@ def process_video(
         "road_side",
         "speed_kmh",
         "speed_type",
+        "calibration_status",
     ]
 
     with open(
@@ -630,14 +541,15 @@ def process_video(
                 "vehicle_class": event["vehicle_class"],
                 "direction": event["direction"],
                 "timestamp_seconds": event["timestamp_seconds"],
-                "road_side": "",
-                "speed_kmh": speed_info.get(
-                    "speed_kmh",
-                    "",
-                ),
+                "road_side": speed_info.get("road", ""),
+                "speed_kmh": speed_info.get("speed_kmh", ""),
                 "speed_type": speed_info.get(
                     "speed_type",
                     "unavailable",
+                ),
+                "calibration_status": speed_info.get(
+                    "calibration_status",
+                    "NOT_AVAILABLE",
                 ),
             }
 
@@ -677,9 +589,15 @@ def process_video(
         summary["total_vehicles"],
     )
 
+    approximate_speed_count = sum(
+        1
+        for speed_info in latest_speed_by_track.values()
+        if speed_info.get("speed_type") == "approximate_perspective"
+    )
+
     print(
-        "Vehicles with simulated speeds:",
-        len(latest_speed_by_track),
+        "Vehicles with approximate perspective speeds:",
+        approximate_speed_count,
     )
 
     print(

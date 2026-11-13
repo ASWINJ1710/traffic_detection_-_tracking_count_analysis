@@ -23,6 +23,7 @@ class VehicleSpeedEstimator:
         history_seconds=0.6,
         min_samples=6,
         max_speed_kmh=180.0,
+        allow_assumed_dimensions=False,
     ):
         self.calibration_path = Path(calibration_path)
 
@@ -42,10 +43,15 @@ class VehicleSpeedEstimator:
 
             road = calibration[road_name]
 
-            if road.get("assumed_dimensions", True):
+            assumed_dimensions = bool(
+                road.get("assumed_dimensions", True)
+            )
+
+            if assumed_dimensions and not allow_assumed_dimensions:
                 raise ValueError(
                     f"{road_name} uses assumed dimensions. "
-                    "Enter actual measured dimensions and recalibrate."
+                    "Enable approximate mode explicitly or enter "
+                    "actual measured dimensions."
                 )
 
             required = (
@@ -98,6 +104,7 @@ class VehicleSpeedEstimator:
                 "polygon": polygon,
                 "width": width,
                 "length": length,
+                "assumed_dimensions": assumed_dimensions,
             }
 
         if not self.calibrations:
@@ -258,7 +265,19 @@ class VehicleSpeedEstimator:
             "speed_kmh": round(speed_kmh, 1),
             "position": world_position,
             "samples": len(samples),
-            "calibrated": True,
+            "calibrated": not self.calibrations[road_name][
+                "assumed_dimensions"
+            ],
+            "speed_type": (
+                "approximate_perspective"
+                if self.calibrations[road_name]["assumed_dimensions"]
+                else "measured_perspective"
+            ),
+            "calibration_status": (
+                "APPROXIMATE_ASSUMED_SCALE"
+                if self.calibrations[road_name]["assumed_dimensions"]
+                else "MEASURED"
+            ),
         }
 
     def reset(self):
