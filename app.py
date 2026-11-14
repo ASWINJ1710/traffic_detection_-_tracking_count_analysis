@@ -102,33 +102,65 @@ st.markdown(
         color: #94a3b8;
     }
 
+    /* Individual KPI card palettes */
     .metric-card {
-        background: #131f32;
-        border: 1px solid #263b55;
-        border-radius: 13px;
-        padding: 17px;
-        min-height: 112px;
+        border-radius: 16px;
+        padding: 19px;
+        min-height: 124px;
+        border: 1px solid rgba(255,255,255,.13);
+        box-shadow: 0 7px 20px rgba(0,0,0,.18);
+        transition: transform .18s ease, box-shadow .18s ease;
     }
-
+    .metric-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 26px rgba(0,0,0,.25);
+    }
+    .metric-blue   { background: linear-gradient(135deg,#173B67,#1D4F91); }
+    .metric-green  { background: linear-gradient(135deg,#155B50,#167D68); }
+    .metric-amber  { background: linear-gradient(135deg,#69421C,#98601F); }
+    .metric-purple { background: linear-gradient(135deg,#51356F,#704B99); }
+    .metric-cyan   { background: linear-gradient(135deg,#15516A,#167A91); }
+    .metric-orange { background: linear-gradient(135deg,#713B2B,#A34E32); }
+    .metric-red    { background: linear-gradient(135deg,#702D3A,#A83D4D); }
+    .metric-teal   { background: linear-gradient(135deg,#174E5B,#167C83); }
+    .metric-slate  { background: linear-gradient(135deg,#334155,#475569); }
     .metric-label {
-        color: #94a3b8;
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.7px;
-    }
-
-    .metric-value {
-        color: #f8fafc;
-        font-size: 29px;
-        font-weight: 800;
-        margin-top: 8px;
-    }
-
-    .metric-caption {
-        color: #64748b;
+        color: #E2E8F0;
         font-size: 11px;
-        margin-top: 3px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+    }
+    .metric-value {
+        color: #FFFFFF;
+        font-size: 28px;
+        line-height: 1.2;
+        font-weight: 800;
+        margin-top: 11px;
+        overflow-wrap: anywhere;
+    }
+    .metric-caption {
+        color: #D0DCEB;
+        font-size: 11px;
+        margin-top: 6px;
+    }
+
+    .dashboard-panel {
+        background: linear-gradient(145deg,#142238,#101b2e);
+        border: 1px solid #2b405b;
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 14px;
+    }
+    .section-title { letter-spacing: .2px; }
+    div[data-testid="stDataFrame"], div[data-testid="stTable"] {
+        border: 1px solid #2b405b;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .stButton > button, .stDownloadButton > button {
+        border-radius: 10px;
+        font-weight: 700;
     }
 
     .info-card {
@@ -167,6 +199,75 @@ st.markdown(
         border-radius: 9px;
         font-weight: 700;
         min-height: 45px;
+    }
+
+
+    /* Compact single-screen analytics dashboard (scoped to Section 3 only) */
+    .st-key-analytics_dashboard {
+        background: #0f1b2d;
+        color: #e5e7eb;
+        border: 1px solid #263b55;
+        border-radius: 12px;
+        padding: 10px 14px 12px 14px;
+        margin-top: 8px;
+    }
+    .st-key-analytics_dashboard [data-testid="stVerticalBlock"] {
+        gap: 0.55rem;
+    }
+    .st-key-analytics_dashboard .section-title {
+        color: #f8fafc !important;
+        font-size: 19px !important;
+        margin-top: 2px !important;
+        margin-bottom: 4px !important;
+    }
+    .st-key-analytics_dashboard h3,
+    .st-key-analytics_dashboard h4,
+    .st-key-analytics_dashboard p,
+    .st-key-analytics_dashboard label,
+    .st-key-analytics_dashboard [data-testid="stMarkdownContainer"] {
+        color: #e2e8f0;
+    }
+    .st-key-analytics_dashboard .section-description {
+        color: #94a3b8 !important;
+        font-size: 11px !important;
+        margin: 0 0 5px 0 !important;
+    }
+    .st-key-analytics_dashboard .metric-card {
+        min-height: 76px !important;
+        height: 76px;
+        padding: 9px 11px !important;
+        border-radius: 10px !important;
+        box-shadow: 0 2px 7px rgba(15, 23, 42, .08) !important;
+    }
+    .st-key-analytics_dashboard .metric-label {
+        font-size: 9px !important;
+        letter-spacing: .45px !important;
+    }
+    .st-key-analytics_dashboard .metric-value {
+        font-size: 21px !important;
+        line-height: 1.1 !important;
+        margin-top: 6px !important;
+    }
+    .st-key-analytics_dashboard .metric-caption {
+        font-size: 9px !important;
+        margin-top: 3px !important;
+    }
+    .st-key-analytics_dashboard [data-testid="stMetric"] {
+        padding: 8px !important;
+        border-radius: 9px !important;
+    }
+    .st-key-analytics_dashboard [data-testid="stDataFrame"] {
+        font-size: 11px;
+    }
+    .st-key-analytics_dashboard hr {
+        margin: 5px 0 !important;
+        border-color: #263b55 !important;
+    }
+    .st-key-analytics_dashboard [data-testid="stPlotlyChart"] {
+        background: #111f33;
+        border: 1px solid #2b405b;
+        border-radius: 9px;
+        padding: 3px;
     }
 
     </style>
@@ -313,14 +414,27 @@ def get_class_count(vehicle_counts, class_name):
     )
 
 
-def create_metric(label, value, caption=""):
+def create_metric(label, value, caption="", color="blue"):
+
+    allowed_colors = {
+        "blue", "green", "amber", "purple", "cyan",
+        "orange", "red", "teal", "slate",
+    }
+    if color not in allowed_colors:
+        color = "blue"
+
+    # Escape text values before placing them in the HTML card.
+    import html
+    safe_label = html.escape(str(label))
+    safe_value = html.escape(str(value))
+    safe_caption = html.escape(str(caption))
 
     st.markdown(
         f"""
-        <div class="metric-card">
-            <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
-            <div class="metric-caption">{caption}</div>
+        <div class="metric-card metric-{color}">
+            <div class="metric-label">{safe_label}</div>
+            <div class="metric-value">{safe_value}</div>
+            <div class="metric-caption">{safe_caption}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -611,348 +725,496 @@ if summary is not None:
 
 
     # ==================================================
-    # SECTION 3: ANALYTICS DASHBOARD
-    # ==================================================
+    with st.container(key="analytics_dashboard"):
+        # SECTION 3: ANALYTICS DASHBOARD
+        # ==================================================
 
-    st.divider()
+        st.divider()
 
-    st.markdown(
-        '<div class="section-title">03 / Traffic Analytics</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        '<div class="section-description">'
-        'Vehicle statistics, traffic direction, speed estimates '
-        'and crossing event analysis.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    vehicle_counts = summary.get(
-        "vehicle_counts", {}
-    )
-
-    direction_counts = summary.get(
-        "direction_counts", {}
-    )
-
-    total_vehicles = summary.get(
-        "total_vehicles", 0
-    )
-
-    csv_path = Path(
-        st.session_state["csv_path"]
-    )
-
-    events = read_csv_file(csv_path)
-
-    average_speed = get_average_speed_kmh(events)
-
-
-    # --------------------------------------------------
-    # KPI CARDS
-    # --------------------------------------------------
-
-    st.markdown("#### Overall Performance")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        create_metric(
-            "Total Vehicles",
-            total_vehicles,
-            "Unique line crossings",
+        st.markdown(
+            '<div class="section-title">03 / Traffic Analytics</div>',
+            unsafe_allow_html=True,
         )
 
-    with col2:
-        create_metric(
-            "UP Direction",
-            direction_counts.get("UP", 0),
-            "Vehicles moving UP",
+        st.markdown(
+            '<div class="section-description">'
+            'Vehicle statistics, traffic direction, speed estimates '
+            'and crossing event analysis.'
+            '</div>',
+            unsafe_allow_html=True,
         )
 
-    with col3:
-        create_metric(
-            "DOWN Direction",
-            direction_counts.get("DOWN", 0),
-            "Vehicles moving DOWN",
+        vehicle_counts = summary.get(
+            "vehicle_counts", {}
         )
 
-    with col4:
-
-        speed_display = (
-            f"~{average_speed:.1f} km/h"
-            if average_speed is not None
-            else "N/A"
+        direction_counts = summary.get(
+            "direction_counts", {}
         )
 
-        create_metric(
-            "Average Approximate Speed",
-            speed_display,
-            "Perspective-based estimated speed",
+        total_vehicles = summary.get(
+            "total_vehicles", 0
         )
 
-
-    # --------------------------------------------------
-    # VEHICLE CLASS CARDS
-    # --------------------------------------------------
-
-    st.markdown("#### Vehicle Classification")
-
-    class_names = list(CLASS_NAMES.values())
-
-    class_columns = st.columns(
-        max(1, len(class_names))
-    )
-
-    for index, class_name in enumerate(class_names):
-
-        count = get_class_count(
-            vehicle_counts,
-            class_name,
+        csv_path = Path(
+            st.session_state["csv_path"]
         )
 
-        with class_columns[index]:
+        events = read_csv_file(csv_path)
+
+        average_speed = get_average_speed_kmh(events)
+
+
+        # --------------------------------------------------
+        # KPI CARDS
+        # --------------------------------------------------
+
+        st.markdown("#### Overall Performance")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            create_metric(
+                "Total Vehicles",
+                total_vehicles,
+                "Unique line crossings",
+                color="blue",
+            )
+
+        with col2:
+            create_metric(
+                "UP Direction",
+                direction_counts.get("UP", 0),
+                "Vehicles moving UP",
+                color="green",
+            )
+
+        with col3:
+            create_metric(
+                "DOWN Direction",
+                direction_counts.get("DOWN", 0),
+                "Vehicles moving DOWN",
+                color="amber",
+            )
+
+        with col4:
+
+            speed_display = (
+                f"~{average_speed:.1f} km/h"
+                if average_speed is not None
+                else "N/A"
+            )
 
             create_metric(
-                str(class_name).title(),
-                count,
-                "Detected crossing vehicles",
+                "Average Approximate Speed",
+                speed_display,
+                "Perspective-based estimated speed",
+                color="purple",
             )
 
 
-    # --------------------------------------------------
-    # CHARTS
-    # --------------------------------------------------
+        # --------------------------------------------------
+        # TRAFFIC CONGESTION ANALYSIS
+        # --------------------------------------------------
 
-    st.divider()
+        st.divider()
 
-    st.markdown("#### Traffic Insights")
+        st.markdown("#### Traffic Congestion Monitoring")
 
-    chart_col1, chart_col2 = st.columns(2)
+        congestion_data = summary.get("congestion", {})
+        congestion_history = summary.get("congestion_history", [])
 
-    # VEHICLE DISTRIBUTION
+        if congestion_data and congestion_data.get("zones"):
 
-    with chart_col1:
-
-        st.markdown("**Vehicle Distribution**")
-
-        class_values = [
-            get_class_count(vehicle_counts, name)
-            for name in class_names
-        ]
-
-        if sum(class_values) > 0:
-
-            class_chart = go.Figure(
-                data=[
-                    go.Bar(
-                        x=[
-                            str(name).title()
-                            for name in class_names
-                        ],
-                        y=class_values,
-                        text=class_values,
-                        textposition="auto",
-                    )
-                ]
+            congestion_level = congestion_data.get(
+                "overall_level", "Unavailable"
             )
 
-            class_chart.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="#131f32",
-                plot_bgcolor="#131f32",
-                font=dict(color="#e5e7eb"),
-                xaxis_title="Vehicle Type",
-                yaxis_title="Vehicle Count",
-                margin=dict(l=20, r=20, t=25, b=30),
-                height=340,
+            congestion_score = congestion_data.get(
+                "overall_score", 0.0
             )
 
-            st.plotly_chart(
-                class_chart,
-                use_container_width=True,
+            current_tracked = congestion_data.get(
+                "total_tracked_vehicles", 0
             )
 
-        else:
-
-            st.info("No vehicle crossing data available.")
-
-
-    # DIRECTION DISTRIBUTION
-
-    with chart_col2:
-
-        st.markdown("**Traffic Direction Distribution**")
-
-        directions = ["UP", "DOWN"]
-
-        direction_values = [
-            direction_counts.get("UP", 0),
-            direction_counts.get("DOWN", 0),
-        ]
-
-        if sum(direction_values) > 0:
-
-            direction_chart = go.Figure(
-                data=[
-                    go.Pie(
-                        labels=directions,
-                        values=direction_values,
-                        hole=0.55,
-                    )
-                ]
+            most_congested = congestion_data.get(
+                "most_congested_zone", "Unavailable"
             )
 
-            direction_chart.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="#131f32",
-                plot_bgcolor="#131f32",
-                font=dict(color="#e5e7eb"),
-                margin=dict(l=20, r=20, t=25, b=25),
-                height=340,
+            congestion_col1, congestion_col2, congestion_col3 = st.columns(3)
+
+            with congestion_col1:
+                create_metric(
+                    "Overall Congestion",
+                    congestion_level,
+                    f"Score: {congestion_score}/100",
+                    color="red",
+                )
+
+            with congestion_col2:
+                create_metric(
+                    "Currently Tracked Vehicles",
+                    current_tracked,
+                    "Vehicles currently inside calibrated road zones",
+                    color="cyan",
+                )
+
+            with congestion_col3:
+                create_metric(
+                    "Most Congested Zone",
+                    most_congested.replace("_", " ").title(),
+                    "Highest zone congestion score",
+                    color="orange",
+                )
+
+            st.caption(
+                "Congestion is a heuristic based on zone occupancy and "
+                "tracked vehicle movement. Road dimensions and zone capacity "
+                "are assumptions, not verified traffic measurements."
             )
 
-            st.plotly_chart(
-                direction_chart,
-                use_container_width=True,
-            )
+            # ZONE-WISE CONGESTION TABLE
 
-        else:
+            st.markdown("**Zone-wise Congestion**")
 
-            st.info("No direction crossing data available.")
+            zone_rows = []
 
-
-    # --------------------------------------------------
-    # --------------------------------------------------
-    # SPEED ANALYSIS
-    # --------------------------------------------------
-
-    st.divider()
-
-    st.markdown("#### Vehicle Speed Analysis")
-
-    speed_records = []
-
-    for event in events:
-
-        try:
-
-            if event.get("speed_type") not in (
-                "",
-                "approximate_perspective",
-                None,
-            ):
-                continue
-
-            speed = float(event.get("speed_kmh", ""))
-
-            if speed >= 0:
-                speed_records.append({
-                    "track_id": event.get("track_id", ""),
-                    "vehicle_class": event.get("vehicle_class", ""),
-                    "speed_kmh": speed,
+            for zone_id, zone in congestion_data["zones"].items():
+                zone_rows.append({
+                    "Road": zone.get("road", "").replace("_", " ").title(),
+                    "Zone": zone.get("zone", ""),
+                    "Vehicles": zone.get("vehicle_count", 0),
+                    "Moving": zone.get("moving_vehicles", 0),
+                    "Stationary": zone.get("stationary_vehicles", 0),
+                    "Occupancy (%)": zone.get("occupancy_percent", 0),
+                    "Score": zone.get("congestion_score", 0),
+                    "Level": zone.get("level", "Unknown"),
+                    "Congested Duration (s)": zone.get(
+                        "congestion_duration_seconds", 0
+                    ),
                 })
 
-        except (ValueError, TypeError):
-            continue
-
-    if speed_records:
-
-        speed_chart = go.Figure(
-            data=[
-                go.Bar(
-                    x=[
-                        f"ID {record['track_id']}"
-                        for record in speed_records
-                    ],
-                    y=[
-                        record["speed_kmh"]
-                        for record in speed_records
-                    ],
-                    text=[
-                        f"~{record['speed_kmh']:.1f} km/h"
-                        for record in speed_records
-                    ],
-                    textposition="auto",
-                )
-            ]
-        )
-
-        speed_chart.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="#131f32",
-            plot_bgcolor="#131f32",
-            font=dict(color="#e5e7eb"),
-            xaxis_title="Vehicle Track ID",
-            yaxis_title="Approximate Speed (km/h)",
-            margin=dict(l=20, r=20, t=25, b=30),
-            height=350,
-        )
-
-        st.plotly_chart(
-            speed_chart,
-            use_container_width=True,
-        )
-
-        st.caption(
-            "Speeds are approximate perspective-based estimates using "
-            "the configured road calibration. They are not certified "
-            "real-world speed measurements."
-        )
-
-    else:
-
-        st.info(
-            "No approximate speed estimates are available in the crossing events."
-        )
-
-
-    # VEHICLE CROSSING EVENTS
-    # --------------------------------------------------
-
-    st.divider()
-
-    st.markdown("#### Vehicle Crossing Event History")
-
-    if events:
-
-        st.dataframe(
-            events,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        with open(csv_path, "rb") as file:
-
-            st.download_button(
-                label="⬇ Download Vehicle Events CSV",
-                data=file.read(),
-                file_name="vehicle_crossing_events.csv",
-                mime="text/csv",
+            st.dataframe(
+                zone_rows,
                 use_container_width=True,
+                hide_index=True,
             )
 
-    else:
+            # CONGESTION HISTORY CHART
 
-        st.info(
-            "No vehicle crossing events were recorded."
+            st.markdown("**Congestion History**")
+
+            if congestion_history:
+
+                history_chart = go.Figure()
+
+                history_chart.add_trace(
+                    go.Scatter(
+                        x=[
+                            item["timestamp_seconds"]
+                            for item in congestion_history
+                        ],
+                        y=[
+                            item["overall_score"]
+                            for item in congestion_history
+                        ],
+                        mode="lines+markers",
+                        name="Overall Congestion",
+                        line=dict(color="#38BDF8", width=3),
+                        marker=dict(color="#A78BFA", size=6),
+                    )
+                )
+
+                history_chart.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="#111f33",
+                    plot_bgcolor="#111f33",
+                    font=dict(color="#e5e7eb"),
+                    xaxis_title="Video Time (seconds)",
+                    yaxis_title="Congestion Score",
+                    yaxis=dict(range=[0, 100]),
+                    margin=dict(l=20, r=20, t=25, b=35),
+                    height=210,
+                )
+
+                st.plotly_chart(
+                    history_chart,
+                    use_container_width=True,
+                )
+
+            else:
+                st.info("No congestion history samples available.")
+
+        else:
+            st.info(
+                "Congestion results are unavailable. "
+                "Process a video with congestion analysis enabled."
+            )
+
+
+        # --------------------------------------------------
+        # VEHICLE CLASS CARDS
+        # --------------------------------------------------
+
+        st.markdown("#### Vehicle Classification")
+
+        class_names = list(CLASS_NAMES.values())
+
+        class_columns = st.columns(
+            max(1, len(class_names))
         )
 
+        class_palette = ["blue", "green", "amber", "purple", "cyan", "orange", "teal", "slate"]
 
-    # --------------------------------------------------
-    # FOOTNOTE
-    # --------------------------------------------------
+        for index, class_name in enumerate(class_names):
 
-    st.divider()
+            count = get_class_count(
+                vehicle_counts,
+                class_name,
+            )
 
-    st.caption(
-        "Vehicle counts represent unique tracked vehicles crossing "
-        "the virtual counting line. Speed estimates depend on "
-        "camera-specific perspective calibration and assumed road "
-        "dimensions. They are not verified real-world speeds."
-    )
+            with class_columns[index]:
+
+                create_metric(
+                    str(class_name).title(),
+                    count,
+                    "Detected crossing vehicles",
+                    color=class_palette[index % len(class_palette)],
+                )
+
+
+        # --------------------------------------------------
+        # CHARTS
+        # --------------------------------------------------
+
+        st.divider()
+
+        st.markdown("#### Traffic Insights")
+
+        chart_col1, chart_col2 = st.columns(2)
+
+        # VEHICLE DISTRIBUTION
+
+        with chart_col1:
+
+            st.markdown("**Vehicle Distribution**")
+
+            class_values = [
+                get_class_count(vehicle_counts, name)
+                for name in class_names
+            ]
+
+            if sum(class_values) > 0:
+
+                class_chart = go.Figure(
+                    data=[
+                        go.Bar(
+                            x=[
+                                str(name).title()
+                                for name in class_names
+                            ],
+                            y=class_values,
+                            text=class_values,
+                            textposition="auto",
+                            marker=dict(color=["#3B82F6", "#10B981", "#F59E0B", "#A78BFA", "#22D3EE", "#F97316", "#14B8A6", "#94A3B8"][:len(class_values)]),
+                        )
+                    ]
+                )
+
+                class_chart.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="#111f33",
+                    plot_bgcolor="#111f33",
+                    font=dict(color="#e5e7eb"),
+                    xaxis_title="Vehicle Type",
+                    yaxis_title="Vehicle Count",
+                    margin=dict(l=20, r=20, t=25, b=30),
+                    height=205,
+                )
+
+                st.plotly_chart(
+                    class_chart,
+                    use_container_width=True,
+                )
+
+            else:
+
+                st.info("No vehicle crossing data available.")
+
+
+        # DIRECTION DISTRIBUTION
+
+        with chart_col2:
+
+            st.markdown("**Traffic Direction Distribution**")
+
+            directions = ["UP", "DOWN"]
+
+            direction_values = [
+                direction_counts.get("UP", 0),
+                direction_counts.get("DOWN", 0),
+            ]
+
+            if sum(direction_values) > 0:
+
+                direction_chart = go.Figure(
+                    data=[
+                        go.Pie(
+                            labels=directions,
+                            values=direction_values,
+                            hole=0.55,
+                            marker=dict(colors=["#10B981", "#F59E0B"], line=dict(color="#101B2E", width=3)),
+                        )
+                    ]
+                )
+
+                direction_chart.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="#111f33",
+                    plot_bgcolor="#111f33",
+                    font=dict(color="#e5e7eb"),
+                    margin=dict(l=20, r=20, t=25, b=25),
+                    height=205,
+                )
+
+                st.plotly_chart(
+                    direction_chart,
+                    use_container_width=True,
+                )
+
+            else:
+
+                st.info("No direction crossing data available.")
+
+
+        # --------------------------------------------------
+        # COMPACT SPEED + CROSSING EVENTS ROW
+        # --------------------------------------------------
+
+        speed_records = []
+
+        for event in events:
+            try:
+                if event.get("speed_type") not in (
+                    "",
+                    "approximate_perspective",
+                    None,
+                ):
+                    continue
+
+                speed = float(event.get("speed_kmh", ""))
+
+                if speed >= 0:
+                    speed_records.append({
+                        "track_id": event.get("track_id", ""),
+                        "vehicle_class": event.get("vehicle_class", ""),
+                        "speed_kmh": speed,
+                    })
+
+            except (ValueError, TypeError):
+                continue
+
+        # Keep both panels in one compact horizontal row.
+        speed_col, events_col = st.columns([0.95, 1.45], gap="small")
+
+        with speed_col:
+            st.markdown("#### Vehicle Speed")
+
+            if speed_records:
+                speed_chart = go.Figure(
+                    data=[
+                        go.Bar(
+                            x=[
+                                f"ID {record['track_id']}"
+                                for record in speed_records
+                            ],
+                            y=[
+                                record["speed_kmh"]
+                                for record in speed_records
+                            ],
+                            text=[
+                                f"{record['speed_kmh']:.1f}"
+                                for record in speed_records
+                            ],
+                            textposition="auto",
+                            marker=dict(color="#818CF8"),
+                        )
+                    ]
+                )
+
+                speed_chart.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="#111f33",
+                    plot_bgcolor="#111f33",
+                    font=dict(color="#e5e7eb", size=9),
+                    xaxis_title="Track ID",
+                    yaxis_title="Speed km/h",
+                    margin=dict(l=8, r=8, t=12, b=28),
+                    height=225,
+                    showlegend=False,
+                    bargap=0.35,
+                )
+
+                speed_chart.update_xaxes(
+                    tickfont=dict(size=8),
+                    gridcolor="#263b55",
+                    zerolinecolor="#334155",
+                )
+                speed_chart.update_yaxes(
+                    tickfont=dict(size=8),
+                    gridcolor="#263b55",
+                    zerolinecolor="#334155",
+                )
+
+                st.plotly_chart(
+                    speed_chart,
+                    use_container_width=True,
+                    config={"displayModeBar": False},
+                )
+
+                st.caption(
+                    "Approximate perspective-based speed; not certified "
+                    "real-world measurements."
+                )
+            else:
+                st.info("No approximate speed estimates available.")
+
+        with events_col:
+            st.markdown("#### Vehicle Crossing Events")
+
+            if events:
+                st.dataframe(
+                    events,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=225,
+                )
+
+                with open(csv_path, "rb") as file:
+                    st.download_button(
+                        label="⬇ Download Events CSV",
+                        data=file.read(),
+                        file_name="vehicle_crossing_events.csv",
+                        mime="text/csv",
+                        type="secondary",
+                    )
+            else:
+                st.info("No vehicle crossing events were recorded.")
+
+
+        # --------------------------------------------------
+        # FOOTNOTE
+        # --------------------------------------------------
+
+        st.divider()
+
+        st.caption(
+            "Vehicle counts represent unique tracked vehicles crossing "
+            "the virtual counting line. Speed estimates depend on "
+            "camera-specific perspective calibration and assumed road "
+            "dimensions. They are not verified real-world speeds."
+        )
 
 
 else:
